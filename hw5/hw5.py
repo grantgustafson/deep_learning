@@ -90,8 +90,8 @@ E = tf.Variable(tf.random_uniform([VOCABSZ, EMBDSZ], minval=-1, maxval=1, dtype=
 embd = tf.nn.embedding_lookup(E, x)
 
 # lstm
-basicLSTMCell = tf.nn.rnn_cell.BasicLSTMCell(LSTMSIZE, state_is_tuple=True)
-initialState = basicLSTMCell.zero_state(BATCHSZ, tf.float32)
+lstm = tf.nn.rnn_cell.BasicLSTMCell(LSTMSIZE, state_is_tuple=True)
+initial_state = lstm.zero_state(BATCHSZ, tf.float32)
 
 # weight and bias vars
 w = tf.Variable(tf.truncated_normal([LSTMSIZE, VOCABSZ], stddev=0.1))
@@ -101,7 +101,7 @@ b = tf.Variable(tf.constant(0.1, shape=[VOCABSZ]))
 embd_drop = tf.nn.dropout(embd, keep_prob)
 
 # run embeddings through lstm
-rnn, outst = dyrnn = tf.nn.dynamic_rnn(basicLSTMCell, embd_drop, initial_state = initialState)
+rnn, out_state = dyrnn = tf.nn.dynamic_rnn(lstm, embd_drop, initial_state = initial_state)
 
 # reshape to 2d
 rnn2 = tf.reshape(rnn, [BATCHSZ * NUMSTEPS, LSTMSIZE])
@@ -119,7 +119,7 @@ y1d = tf.reshape(y, [BATCHSZ*NUMSTEPS])
 loss1 = tf.nn.seq2seq.sequence_loss_by_example([logits], [y1d], [w2])
 loss = tf.reduce_sum(loss1)
 
-trainStep = tf.train.AdamOptimizer(LEARNING_RATE).minimize(loss)
+train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(loss)
 
 sess.run(tf.initialize_all_variables())
 
@@ -133,11 +133,11 @@ for e in range(EPOCHS):
 	state = (np.zeros([BATCHSZ, LSTMSIZE]), np.zeros([BATCHSZ, LSTMSIZE]))
 	while i + BATCHSZ*NUMSTEPS + 1 < len(trains):
 		batches += 1
-		nextstate, _, l = sess.run([outst, trainStep, loss], 
+		nextstate, _, l = sess.run([out_state, train_step, loss], 
 			feed_dict = {x: np.reshape(trains[i : i + BATCHSZ*NUMSTEPS], (BATCHSZ, NUMSTEPS)),
 						 y: np.reshape(trains[i+1 : i+1+BATCHSZ*NUMSTEPS], (BATCHSZ, NUMSTEPS)),  
 						 keep_prob: .5,
-						 initialState: state})
+						 initial_state: state})
 		#print (np.reshape(trains[i : i + BATCHSZ*NUMSTEPS], (BATCHSZ, NUMSTEPS)))
 		#print (np.reshape(trains[i+1 : i+1+BATCHSZ*NUMSTEPS], (BATCHSZ, NUMSTEPS)))
 		#exit()
@@ -160,7 +160,7 @@ while i + BATCHSZ*NUMSTEPS + 1 < len(tests):
 		feed_dict = {x: np.reshape(tests[i : i + BATCHSZ*NUMSTEPS], (BATCHSZ, NUMSTEPS)),
 					 y: np.reshape(tests[i+1 : i+1+BATCHSZ*NUMSTEPS], (BATCHSZ, NUMSTEPS)),
 					 keep_prob: 1.0, 
-					 initialState: state})
+					 initial_state: state})
 	i += BATCHSZ*NUMSTEPS
 	state = nextstate
 	lsum += (l / (BATCHSZ*NUMSTEPS))
